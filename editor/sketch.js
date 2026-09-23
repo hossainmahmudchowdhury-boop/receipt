@@ -1,5 +1,7 @@
 // RECEIPT!
 // This is the file to edit. p5.js reference: https://p5js.org/reference/
+// RECEIPT!
+// This is the file to edit. p5.js reference: https://p5js.org/reference/
 import JsBarcode from "jsbarcode";
 
 export const receipt = {
@@ -12,22 +14,32 @@ export function drawReceipt(p) {
   const { width: w, height: h } = p;
   const margin = 24;
 
-  // Header
+  p.background(255);
+
+  // Header with flanking radio-wave arcs
+  drawRadioWaves(p, margin + 20, 46, -1);
+  drawRadioWaves(p, w - margin - 20, 46, 1);
   p.noStroke();
   p.fill(0);
-    p.textFont("monospace");
-    p.textAlign(p.CENTER, p.TOP);
-    p.textStyle(p.BOLD);
-    p.textSize(28);
-    p.text("NIGHT SIGNALS", w / 2, 30);
+  p.textFont("monospace");
+  p.textAlign(p.CENTER, p.TOP);
+  p.textStyle(p.BOLD);
+  p.textSize(28);
+  p.text("NIGHT SIGNALS", w / 2, 30);
 
   dashedLine(p, margin, 94, w - margin, 94, 6, 5);
+
+  // Moon with a stippled halo, tucked into the star field
+  drawMoon(p, w - margin - 46, 170, 26);
 
   // A seeded field of tiny stars and radio noise.
   for (let i = 0; i < 150; i += 1) {
     const x = p.random(margin, w - margin);
     const y = p.random(118, 350);
     const size = p.random([1, 1, 1, 2, 2, 3]);
+    if (p.dist(x, y, w - margin - 46, 170) < 55) continue; // leave the moon clear
+    p.noStroke();
+    p.fill(0);
     if (p.random() > 0.82) {
       p.rect(x - 3, y, 7, 1);
       p.rect(x, y - 3, 1, 7);
@@ -36,24 +48,40 @@ export function drawReceipt(p) {
     }
   }
 
-  // Layered mountain signals. p.noise() and p.random() are both seeded.
+  // A distant radio tower, blinking
+  drawTower(p, margin + 34, 350, 90);
+
+  // Layered mountain signals — alternating solid + hatched ridges for depth.
   const ridgeTop = 300;
   for (let layer = 0; layer < 5; layer += 1) {
-    p.fill(layer % 2 === 0 ? 0 : 255);
+    const baseY = 500 + layer * 48;
+    const points = [];
+    for (let x = margin; x <= w - margin; x += 4) {
+      const wave = p.noise(x * 0.012, layer * 4.2) * 90;
+      points.push({ x, y: ridgeTop + layer * 50 - wave });
+    }
+
     p.stroke(0);
     p.strokeWeight(2);
-    p.beginShape();
-    p.vertex(margin, 500 + layer * 48);
-    for (let x = margin; x <= w - margin; x += 5) {
-      const wave = p.noise(x * 0.012, layer * 4.2) * 90;
-      const y = ridgeTop + layer * 50 - wave;
-      p.vertex(x, y);
+    if (layer % 2 === 0) {
+      p.fill(0);
+      p.beginShape();
+      p.vertex(margin, baseY);
+      points.forEach((pt) => p.vertex(pt.x, pt.y));
+      p.vertex(w - margin, baseY);
+      p.endShape(p.CLOSE);
+    } else {
+      p.noFill();
+      p.beginShape();
+      p.vertex(margin, baseY);
+      points.forEach((pt) => p.vertex(pt.x, pt.y));
+      p.vertex(w - margin, baseY);
+      p.endShape(p.CLOSE);
+      hatchRidge(p, points, baseY, 6);
     }
-    p.vertex(w - margin, 500 + layer * 48);
-    p.endShape(p.CLOSE);
   }
 
-  // The transmission: a winding route with little station markers.
+  // The transmission: a winding route with pulsing station markers.
   p.noFill();
   p.stroke(0);
   p.strokeWeight(5);
@@ -66,10 +94,16 @@ export function drawReceipt(p) {
   }
   p.endShape();
 
-  p.strokeWeight(2);
-  p.fill(255);
   route.forEach(({ x, y }, index) => {
     if (index % 2 === 0) {
+      p.strokeWeight(1.2);
+      p.noFill();
+      const rings = 1 + (index % 3);
+      for (let r = 1; r <= rings; r += 1) {
+        p.circle(x, y, 10 + r * 8);
+      }
+      p.strokeWeight(2);
+      p.fill(255);
       p.square(x - 6, y - 6, 12);
       p.line(index % 4 === 0 ? margin : w - margin, y, x, y);
     }
@@ -78,6 +112,7 @@ export function drawReceipt(p) {
   dashedLine(p, margin, 930, w - margin, 930, 6, 5);
 
   const barcodeValue = "receipt.hackclub.com";
+  drawBarcodeFrame(p, w / 2, 946, 186, 68);
   drawBarcode(p, barcodeValue, w / 2, 960);
 
   p.noStroke();
@@ -87,6 +122,89 @@ export function drawReceipt(p) {
   p.textStyle(p.NORMAL);
   p.textSize(10);
   p.text(barcodeValue, w / 2, 1024);
+}
+
+// Concentric arcs suggesting a signal being broadcast
+function drawRadioWaves(p, x, y, dir) {
+  p.noFill();
+  p.stroke(0);
+  p.strokeWeight(1.5);
+  for (let r = 1; r <= 3; r += 1) {
+    p.arc(x, y, r * 16, r * 16, dir > 0 ? -0.6 : p.PI - 0.6 + 3.14, dir > 0 ? 0.6 : p.PI + 0.6, p.OPEN);
+  }
+}
+
+// A cratered moon with a dot-stippled halo
+function drawMoon(p, x, y, r) {
+  p.noStroke();
+  for (let i = 0; i < 220; i += 1) {
+    const a = p.random(p.TWO_PI);
+    const d = r * 1.4 + p.random(r * 1.6);
+    const px = x + Math.cos(a) * d;
+    const py = y + Math.sin(a) * d;
+    if (p.noise(px * 0.05, py * 0.05) > 0.55) p.point(px, py);
+  }
+  p.fill(255);
+  p.stroke(0);
+  p.strokeWeight(2);
+  p.circle(x, y, r * 2);
+  p.noFill();
+  p.strokeWeight(1);
+  p.circle(x - r * 0.3, y - r * 0.2, r * 0.4);
+  p.circle(x + r * 0.35, y + r * 0.1, r * 0.25);
+  p.circle(x - r * 0.05, y + r * 0.4, r * 0.3);
+}
+
+// A distant transmission tower with a blinking light
+function drawTower(p, x, baseY, height) {
+  p.stroke(0);
+  p.strokeWeight(2);
+  const top = baseY - height;
+  p.line(x, baseY, x, top);
+  p.line(x - 14, baseY, x, top + 12);
+  p.line(x + 14, baseY, x, top + 12);
+  for (let i = 1; i <= 3; i += 1) {
+    const yy = baseY - i * (height / 4);
+    p.line(x - 14 + (i * 14) / 4, yy, x + 14 - (i * 14) / 4, yy);
+  }
+  p.noStroke();
+  p.fill(0);
+  p.circle(x, top - 4, 6);
+}
+
+// Diagonal cross-hatching confined under a ridge line, for shaded layers
+function hatchRidge(p, points, baseY, spacing) {
+  p.stroke(0);
+  p.strokeWeight(1);
+  for (let x = points[0].x; x <= points[points.length - 1].x; x += 2) {
+    const idx = Math.min(points.length - 1, Math.floor((x - points[0].x) / 4));
+    const topY = points[idx].y;
+    for (let y = topY; y < baseY; y += 2) {
+      if ((x + y) % spacing < 2) p.point(x, y);
+    }
+  }
+}
+
+// Ticket-style frame with corner ticks around the barcode
+function drawBarcodeFrame(p, cx, y, w, h) {
+  p.noFill();
+  p.stroke(0);
+  p.strokeWeight(1);
+  const x1 = cx - w / 2;
+  const x2 = cx + w / 2;
+  const y1 = y - 6;
+  const y2 = y + h;
+  const tick = 8;
+  [
+    [x1, y1, x1 + tick, y1],
+    [x1, y1, x1, y1 + tick],
+    [x2, y1, x2 - tick, y1],
+    [x2, y1, x2, y1 + tick],
+    [x1, y2, x1 + tick, y2],
+    [x1, y2, x1, y2 - tick],
+    [x2, y2, x2 - tick, y2],
+    [x2, y2, x2, y2 - tick],
+  ].forEach(([ax, ay, bx, by]) => p.line(ax, ay, bx, by));
 }
 
 function drawBarcode(p, value, centerX, y) {
