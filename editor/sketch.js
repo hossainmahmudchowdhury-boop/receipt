@@ -2,6 +2,8 @@
 // This is the file to edit. p5.js reference: https://p5js.org/reference/
 // RECEIPT!
 // This is the file to edit. p5.js reference: https://p5js.org/reference/
+ import JsBarcode from "jsbarcode";
+
 export const receipt = {
   height: 1080, // 240–2000 px. Width is fixed at 384 by the printer.
   seed: 67,
@@ -18,10 +20,14 @@ export function drawReceipt(p) {
   const w = p.width;
   const h = p.height;
 
-  const skyBottom = h * 0.34;
-  const mountainBand = h * 0.4;
-  const fieldBottom = h * 0.52;
-  const waterBottom = h * 0.78;
+  // reserve space at the bottom for the barcode footer
+  const footerH = 90;
+  const sceneH = h - footerH;
+
+  const skyBottom = sceneH * 0.34;
+  const mountainBand = sceneH * 0.4;
+  const fieldBottom = sceneH * 0.52;
+  const waterBottom = sceneH * 0.78;
   const bankTop = waterBottom;
 
   drawSky(p, w, skyBottom);
@@ -29,8 +35,10 @@ export function drawReceipt(p) {
   drawFields(p, w, fieldBottom, mountainBand);
   drawWater(p, w, waterBottom, fieldBottom);
   drawBoats(p, w, fieldBottom, waterBottom);
-  drawBank(p, w, h, bankTop);
-  drawPosts(p, w, h, bankTop);
+  drawBank(p, w, sceneH, bankTop);
+  drawPosts(p, w, sceneH, bankTop);
+
+  drawFooter(p, w, h, sceneH);
 }
 
 // Overcast sky: soft hatched cloud clumps
@@ -46,13 +54,12 @@ function drawSky(p, w, bottom) {
       p.circle(x, y, size);
     }
   }
-  // a stray wire cutting across the sky
   p.stroke(0);
   p.strokeWeight(1);
   p.line(0, bottom * 0.08, w, bottom * 0.28);
 }
 
-// Distant hazy mountain range, layered and faint via sparse hatching
+// Distant hazy mountain range
 function drawMountains(p, w, bandY, skyBottom) {
   const baseline = bandY;
   const points = [];
@@ -69,7 +76,6 @@ function drawMountains(p, w, bandY, skyBottom) {
   points.forEach((pt) => p.vertex(pt.x, pt.y));
   p.endShape();
 
-  // sparse stipple beneath the ridge line to suggest atmospheric haze
   p.noStroke();
   p.fill(0);
   for (let i = 0; i < 260; i += 1) {
@@ -81,7 +87,7 @@ function drawMountains(p, w, bandY, skyBottom) {
   }
 }
 
-// Flat green paddy fields as a horizontal band, with a small hut silhouette
+// Flat green paddy fields, hut silhouette, embankment
 function drawFields(p, w, bottom, top) {
   p.stroke(0);
   p.strokeWeight(1);
@@ -89,7 +95,6 @@ function drawFields(p, w, bottom, top) {
     const jitter = p.noise(y * 0.1, 5) * 2;
     p.line(0, y + jitter, w, y + jitter);
   }
-  // a small hut on the horizon
   const hx = w * 0.42;
   const hy = top + (bottom - top) * 0.4;
   p.noFill();
@@ -97,7 +102,6 @@ function drawFields(p, w, bottom, top) {
   p.rect(hx, hy, 14, 8);
   p.triangle(hx - 2, hy, hx + 7, hy - 6, hx + 16, hy);
 
-  // the raised earthen embankment running toward the boats
   p.strokeWeight(2);
   p.line(w * 0.1, bottom - 2, w * 0.95, bottom + 8);
   p.strokeWeight(1);
@@ -106,7 +110,7 @@ function drawFields(p, w, bottom, top) {
   }
 }
 
-// Open water with light ripple hatching
+// Open water with ripple hatching
 function drawWater(p, w, bottom, top) {
   p.stroke(0);
   for (let y = top; y < bottom; y += 5) {
@@ -122,7 +126,7 @@ function drawWater(p, w, bottom, top) {
   }
 }
 
-// Cluster of moored wooden boats, hulls only, drawn as simple angular forms
+// Cluster of moored wooden boats
 function drawBoats(p, w, fieldBottom, waterBottom) {
   const baseY = fieldBottom + (waterBottom - fieldBottom) * 0.35;
   const boatData = [
@@ -154,22 +158,17 @@ function drawHull(p, len) {
   p.vertex(half, 6);
   p.vertex(-half, 6);
   p.endShape();
-  // waterline hatch under hull
   p.strokeWeight(1);
   for (let x = -half; x < half; x += 4) {
     p.line(x, 6, x + 2, 8);
   }
-  // small raised bow post
   p.line(half + 6, -6, half + 8, -14);
 }
 
 // Muddy bank / road foreground with a lane marking
 function drawBank(p, w, h, top) {
-  p.noStroke();
-  p.fill(0);
   const roadTop = h * 0.9;
 
-  // bank: cross-hatched earth texture
   for (let y = top; y < roadTop; y += 3) {
     p.stroke(0);
     p.strokeWeight(0.6);
@@ -180,21 +179,19 @@ function drawBank(p, w, h, top) {
     }
   }
 
-  // road strip
   p.stroke(0);
   p.strokeWeight(1.5);
   p.line(0, roadTop, w, roadTop);
   p.strokeWeight(3);
   p.line(0, h - 4, w, h - 4);
 
-  // dashed lane marking
   for (let x = 0; x < w; x += 16) {
     p.strokeWeight(2);
     p.line(x, (roadTop + h - 4) / 2, x + 8, (roadTop + h - 4) / 2);
   }
 }
 
-// Red-and-white striped roadside marker posts, drawn in foreground perspective
+// Red-and-white striped roadside marker posts
 function drawPosts(p, w, h, bankTop) {
   const posts = [
     { x: w * 0.14, pw: 26, ph: h * 0.38 },
@@ -223,4 +220,45 @@ function drawPosts(p, w, h, bankTop) {
     p.noFill();
     p.stroke(0);
   });
+}
+
+// Ticket-style footer with a dashed tear line, barcode, and label
+function drawFooter(p, w, h, sceneH) {
+  dashedLine(p, 14, sceneH + 4, w - 14, sceneH + 4, 6, 5);
+
+  const barcodeValue = "receipt.hackclub.com";
+  drawBarcode(p, barcodeValue, w / 2, sceneH + 14);
+
+  p.noStroke();
+  p.fill(0);
+  p.textFont("monospace");
+  p.textAlign(p.CENTER, p.TOP);
+  p.textSize(10);
+  p.text(barcodeValue, w / 2, h - 20);
+}
+
+function drawBarcode(p, value, centerX, y) {
+  const barcodeCanvas = document.createElement("canvas");
+  JsBarcode(barcodeCanvas, value, {
+    format: "CODE128",
+    width: 1,
+    height: 44,
+    displayValue: false,
+    margin: 0,
+    background: "#ffffff",
+    lineColor: "#000000",
+  });
+  p.drawingContext.drawImage(
+    barcodeCanvas,
+    Math.floor(centerX - barcodeCanvas.width / 2),
+    y
+  );
+}
+
+function dashedLine(p, x1, y1, x2, y2, dash, gap) {
+  p.stroke(0);
+  p.strokeWeight(2);
+  for (let x = x1; x < x2; x += dash + gap) {
+    p.line(x, y1, Math.min(x + dash, x2), y2);
+  }
 }
